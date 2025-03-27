@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Circles</title>
+  <style>
+    body { 
+      margin: 0; 
+      padding: 20px; 
+      font-family: Arial, sans-serif;
+    }
+    svg {
+      background: #f0f0f0;
+      border: 1px solid #ccc;
+    }
+    .test-circle {
+      fill: red;
+      stroke: white;
+      stroke-width: 2px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Test Circles</h1>
+  <p>This is a test page to see if SVG circle rendering works at all</p>
+  
+  <div id="svg-container"></div>
+  
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    // Create an SVG
+    const svg = d3.select("#svg-container")
+      .append("svg")
+      .attr("width", 960)
+      .attr("height", 600);
+    
+    // Add background rectangle
+    svg.append("rect")
+      .attr("width", 960)
+      .attr("height", 600)
+      .attr("fill", "#f8f8f8");
+      
+    // Add some test circles at different positions
+    [
+      {x: 100, y: 100, r: 20},
+      {x: 200, y: 200, r: 30},
+      {x: 300, y: 300, r: 40},
+      {x: 400, y: 400, r: 50},
+      {x: 500, y: 500, r: 60},
+      {x: 600, y: 100, r: 25},
+      {x: 700, y: 200, r: 35},
+      {x: 800, y: 300, r: 45}
+    ].forEach(circle => {
+      svg.append("circle")
+        .attr("cx", circle.x)
+        .attr("cy", circle.y)
+        .attr("r", circle.r)
+        .attr("class", "test-circle");
+    });
+    
+    // Add text labels to show positions
+    svg.selectAll("text")
+      .data([
+        {x: 100, y: 100, text: "100,100"},
+        {x: 200, y: 200, text: "200,200"},
+        {x: 300, y: 300, text: "300,300"},
+        {x: 400, y: 400, text: "400,400"},
+        {x: 500, y: 500, text: "500,500"}
+      ])
+      .enter()
+      .append("text")
+      .attr("x", d => d.x + 10)
+      .attr("y", d => d.y - 10)
+      .text(d => d.text)
+      .attr("font-size", "12px");
+      
+    console.log("Test circles should be visible now");
+  </script>
+</body>
+</html> 
