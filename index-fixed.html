@@ -319,36 +319,18 @@
           .attr("font-weight", "bold")
           .text("Candidate Colors");
         
-        if (candidatesForContest.length === 2) {
-          // Special legend for two-candidate races showing the gradient
-          const option1 = candidatesForContest[0];
-          const option2 = candidatesForContest[1];
-          
-          // For Yes/No contests, ensure we're using the right colors
-          let color1, color2;
-          
-          if (isYesNoContest) {
-            // Find YES and NO options
-            const yesOption = candidatesForContest.find(c => 
-              c.Description === "YES" || 
-              c.Description === "BONDS - YES");
-              
-            const noOption = candidatesForContest.find(c => 
-              c.Description === "NO" || 
-              c.Description === "BONDS - NO");
-              
-            // Assign green for YES, red for NO
-            const yesColor = "#28a745";  // Green
-            const noColor = "#dc3545";   // Red
+        if (candidatesForContest.length === 2 && isYesNoContest) {
+          // Special legend for YES/NO races showing the gradient
+          // Find YES and NO options
+          const yesOption = candidatesForContest.find(c => 
+            c.Description === "YES" || c.Description === "BONDS - YES");
             
-            // Set colors explicitly for gradient
-            color1 = option1.Description.includes("YES") ? yesColor : noColor;
-            color2 = option2.Description.includes("YES") ? yesColor : noColor;
-          } else {
-            // For other two-option contests, use the normal color scale
-            color1 = colorScale(String(option1.Id));
-            color2 = colorScale(String(option2.Id));
-          }
+          const noOption = candidatesForContest.find(c => 
+            c.Description === "NO" || c.Description === "BONDS - NO");
+          
+          // Colors for yes/no
+          const yesColor = "#28a745";  // Green
+          const noColor = "#dc3545";   // Red
           
           // Add legend items with description of the gradient
           legendContainer.append("text")
@@ -369,11 +351,11 @@
             
           gradient.append("stop")
             .attr("offset", "0%")
-            .attr("stop-color", color2);
+            .attr("stop-color", noColor);
             
           gradient.append("stop")
             .attr("offset", "100%")
-            .attr("stop-color", color1);
+            .attr("stop-color", yesColor);
           
           // Add gradient rectangle
           legendContainer.append("rect")
@@ -388,13 +370,13 @@
             .attr("x", 0)
             .attr("y", 60)
             .attr("font-size", "11px")
-            .text(`100% ${option2.Description}`);
+            .text(`100% NO`);
             
           legendContainer.append("text")
-            .attr("x", 150 - option1.Description.length * 4)
+            .attr("x", 130)
             .attr("y", 60)
             .attr("font-size", "11px")
-            .text(`100% ${option1.Description}`);
+            .text(`100% YES`);
           
         } else {
           // Standard legend for multi-candidate races
@@ -489,45 +471,35 @@
             // Instead of opacity, determine color based on win percentage
             let circleColor;
             
-            if (candidatesForContest.length === 2) {
-              // For contests with exactly 2 options (like YES/NO or 2 candidates)
+            if (candidatesForContest.length === 2 && isYesNoContest) {
+              // ONLY for YES/NO contests, use the gradient approach
               const option1 = candidatesForContest[0];
               const option2 = candidatesForContest[1];
               
-              // Define colors based on whether this is a YES/NO contest
-              let color1, color2;
+              // Use green for YES, red for NO
+              const yesColor = "#28a745";  // Green
+              const noColor = "#dc3545";   // Red
               
-              if (isYesNoContest) {
-                // Use green for YES, red for NO
-                const yesColor = "#28a745";  // Green
-                const noColor = "#dc3545";   // Red
-                
-                // Determine which option is YES and which is NO
-                const isOption1Yes = option1.Description.includes("YES");
-                color1 = isOption1Yes ? yesColor : noColor;
-                color2 = isOption1Yes ? noColor : yesColor;
-              } else {
-                // Use normal color scale for other two-option contests
-                color1 = colorScale(String(option1.Id));
-                color2 = colorScale(String(option2.Id));
-              }
+              // Find the YES option
+              const yesOption = candidatesForContest.find(c => 
+                c.Description === "YES" || c.Description === "BONDS - YES");
               
-              // Calculate percentage for first option
-              const option1Votes = contestData[option1.Id] || 0;
-              const option1Percentage = totalContestVotes > 0 ? option1Votes / totalContestVotes : 0;
+              // Calculate percentage of YES votes
+              const yesVotes = contestData[yesOption.Id] || 0;
+              const yesPercentage = totalContestVotes > 0 ? yesVotes / totalContestVotes : 0;
               
-              // Create interpolator between the two colors
-              const colorInterpolator = d3.interpolate(color2, color1);
+              // Create interpolator between red and green
+              const colorInterpolator = d3.interpolate(noColor, yesColor);
               
-              // Map option1's percentage (0-1) to a color
-              circleColor = colorInterpolator(option1Percentage);
+              // Map yes percentage (0-1) to a color
+              circleColor = colorInterpolator(yesPercentage);
               
               // Log for debugging
               if (precinctId % 100 === 0) {
-                console.log(`Precinct ${precinctId}: option1=${option1.Description}, option1%=${option1Percentage.toFixed(2)}, color=${circleColor}`);
+                console.log(`Precinct ${precinctId}: YES%=${yesPercentage.toFixed(2)}, color=${circleColor}`);
               }
             } else {
-              // For contests with more than 2 candidates
+              // For all other contests (including non-YES/NO two-candidate races)
               // Blend between winner's color and neutral gray based on win margin
               if (winningCandidateId) {
                 const winnerColor = colorScale(winningCandidateId);
