@@ -24,8 +24,11 @@
     
     #controls {
       margin: 0 auto 40px;
-      width: 600px;
+      width: 100%;
+      max-width: 600px;
       text-align: center;
+      padding: 0 20px;
+      box-sizing: border-box;
     }
     
     #map-container {
@@ -97,6 +100,77 @@
       white-space: nowrap;  /* Prevent text wrapping */
       width: auto;  /* Allow text to extend beyond container */
     }
+    
+    #contest-select {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      background-color: white;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      background-size: 12px;
+      transition: border-color 0.2s ease;
+    }
+    
+    #contest-select option {
+      font-size: 16px;
+      padding: 12px;
+      line-height: 1.4;
+    }
+    
+    #contest-select:hover {
+      border-color: #999;
+    }
+    
+    #contest-select:focus {
+      outline: none;
+      border-color: #666;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+    
+    .select-container {
+      position: relative;
+      display: inline-block;
+      width: 100%;
+    }
+    
+    .select-label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: #666;
+      text-align: left;
+    }
+    
+    @media (max-width: 768px) {
+      body {
+        padding: 10px;
+      }
+      
+      h1 {
+        font-size: 20px;
+      }
+      
+      .description {
+        font-size: 12px;
+      }
+      
+      #controls {
+        margin-bottom: 20px;
+      }
+      
+      #contest-select, #contest-select option {
+        font-size: 16px;  /* Keep font size readable on mobile */
+        padding: 12px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -104,8 +178,10 @@
   <div class="description">Bubble size represents total votes in each precinct for the selected contest</div>
   
   <div id="controls">
-    <label for="contest-select">Select Contest: </label>
-    <select id="contest-select"></select>
+    <div class="select-container">
+      <label for="contest-select" class="select-label">Select Contest:</label>
+      <select id="contest-select"></select>
+    </div>
   </div>
   
   <div id="map-container">
