@@ -143,6 +143,10 @@
       d3.json("11-2024-meta.json"),
       d3.json("precinct-centroids.json")
     ]).then(([shapesData, votesData, metaData, centroidsData]) => {
+      // Get contest ID from URL if present
+      const urlParams = new URLSearchParams(window.location.search);
+      const contestIdFromUrl = urlParams.get('contest');
+      
       // Set up the dropdown for contest selection
       const contests = metaData.contests;
       const contestSelect = d3.select("#contest-select");
@@ -624,13 +628,22 @@
         });
       }
       
-      // Listen for dropdown changes
+      // Update URL when contest changes
       contestSelect.on("change", function() {
-        updateVisualization(this.value);
+        const newContestId = this.value;
+        // Update URL without reloading the page
+        const newUrl = new URL(window.location);
+        newUrl.searchParams.set('contest', newContestId);
+        window.history.pushState({}, '', newUrl);
+        
+        updateVisualization(newContestId);
       });
       
-      // Initialize with turnout (99) or first contest
-      const initialContest = contests.find(c => c.Id === 99) || contests[0];
+      // Initialize with contest from URL, or turnout (99), or first contest
+      const initialContest = contestIdFromUrl ? 
+        contests.find(c => c.Id == contestIdFromUrl) || contests[0] :
+        contests.find(c => c.Id === 99) || contests[0];
+      
       contestSelect.property("value", initialContest.Id);
       updateVisualization(initialContest.Id);
     });
