@@ -23,7 +23,7 @@
     }
     
     #controls {
-      margin: 0 auto 20px;
+      margin: 0 auto 40px;
       width: 600px;
       text-align: center;
     }
@@ -32,11 +32,12 @@
       width: 960px;
       margin: 0 auto;
       position: relative;
-      background-color: #f8f8f8;
+      background-color: white;
+      padding: 60px 20px 20px 20px;
     }
     
     .land {
-      fill: #eee;
+      fill: white;
     }
     
     .boundary {
@@ -61,7 +62,7 @@
     .tooltip {
       position: absolute;
       background: #fff;
-      border: 1px solid #ccc;
+      border: 1px solid black;
       padding: 5px;
       border-radius: 3px;
       pointer-events: none;
@@ -89,7 +90,7 @@
   <script>
     // Main dimensions and setup
     const width = 960;
-    const height = 600;
+    const height = 960;
     
     // Create SVG
     const svg = d3.select("#map-container")
@@ -102,7 +103,7 @@
     
     // Define projection for San Francisco
     const projection = d3.geoMercator()
-      .center([-122.45, 37.75])
+      .center([-122.425469, 37.7715049])
       .scale(220000)
       .translate([width / 2, height / 2]);
       
