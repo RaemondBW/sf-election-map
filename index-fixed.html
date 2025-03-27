@@ -47,7 +47,6 @@
     }
     
     .bubble {
-      fill-opacity: 0.7;
       stroke: white;
       stroke-width: 1px;
     }
@@ -240,7 +239,7 @@
         // Scale for bubble sizes
         const radiusScale = d3.scaleLinear()
           .domain([0, maxVotes])
-          .range([0, 10]);
+          .range([0, 8]);
         
         // Get all candidates for this contest
         const candidatesForContest = metaData.candidates
@@ -251,9 +250,51 @@
         
         // Create a color scale for the candidates
         const candidateIds = candidatesForContest.map(c => String(c.Id));
-        const colorScale = d3.scaleOrdinal()
+        let colorScale = d3.scaleOrdinal()
           .domain(candidateIds)
           .range(d3.schemeCategory10);
+          
+        // For Yes/No contests, override with green/red colors
+        const isYesNoContest = candidatesForContest.length === 2 && 
+                              (candidatesForContest[0].Description === "YES" || 
+                               candidatesForContest[0].Description === "BONDS - YES" ||
+                               candidatesForContest[1].Description === "YES" ||
+                               candidatesForContest[1].Description === "BONDS - YES");
+                               
+        if (isYesNoContest) {
+          // Find YES and NO options
+          const yesOption = candidatesForContest.find(c => 
+            c.Description === "YES" || 
+            c.Description === "BONDS - YES");
+            
+          const noOption = candidatesForContest.find(c => 
+            c.Description === "NO" || 
+            c.Description === "BONDS - NO");
+            
+          if (yesOption && noOption) {
+            // Override the colors for YES/NO
+            const yesColor = "#28a745"; // Green
+            const noColor = "#dc3545";  // Red
+            
+            // Save the original domain method
+            const originalDomain = colorScale.domain;
+            
+            // Create a separate color mapping function for yes/no that preserves methods
+            const yesNoColorScale = function(d) {
+              if (d === String(yesOption.Id)) return yesColor;
+              if (d === String(noOption.Id)) return noColor;
+              return colorScale(d); // Fallback to original scale
+            };
+            
+            // Copy methods from original scale to maintain API compatibility
+            yesNoColorScale.domain = originalDomain;
+            
+            // Replace the colorScale with our custom function for this contest
+            colorScale = yesNoColorScale;
+            
+            console.log(`Using custom YES/NO colors: YES=${yesColor}, NO=${noColor}`);
+          }
+        }
         
         // Log the color scale information
         console.log("Color scale domain:", colorScale.domain());
@@ -276,27 +317,120 @@
           .attr("x", 0)
           .attr("y", 0)
           .attr("font-weight", "bold")
-          .text("Winner in Precinct");
+          .text("Candidate Colors");
         
-        // Add legend items
-        candidatesForContest.forEach((candidate, i) => {
-          const candidateId = String(candidate.Id);
-          const color = colorScale(candidateId);
+        if (candidatesForContest.length === 2) {
+          // Special legend for two-candidate races showing the gradient
+          const option1 = candidatesForContest[0];
+          const option2 = candidatesForContest[1];
           
-          const legendItem = legendContainer.append("g")
-            .attr("transform", `translate(0, ${i * 20 + 20})`);
+          // For Yes/No contests, ensure we're using the right colors
+          let color1, color2;
           
-          legendItem.append("rect")
-            .attr("width", 15)
-            .attr("height", 15)
-            .attr("fill", color);
+          if (isYesNoContest) {
+            // Find YES and NO options
+            const yesOption = candidatesForContest.find(c => 
+              c.Description === "YES" || 
+              c.Description === "BONDS - YES");
+              
+            const noOption = candidatesForContest.find(c => 
+              c.Description === "NO" || 
+              c.Description === "BONDS - NO");
+              
+            // Assign green for YES, red for NO
+            const yesColor = "#28a745";  // Green
+            const noColor = "#dc3545";   // Red
+            
+            // Set colors explicitly for gradient
+            color1 = option1.Description.includes("YES") ? yesColor : noColor;
+            color2 = option2.Description.includes("YES") ? yesColor : noColor;
+          } else {
+            // For other two-option contests, use the normal color scale
+            color1 = colorScale(String(option1.Id));
+            color2 = colorScale(String(option2.Id));
+          }
           
-          legendItem.append("text")
-            .attr("x", 20)
-            .attr("y", 12)
+          // Add legend items with description of the gradient
+          legendContainer.append("text")
+            .attr("x", 0)
+            .attr("y", 20)
             .attr("font-size", "12px")
-            .text(candidate.Description);
-        });
+            .text("Color shows vote distribution:");
+          
+          // Create gradient definition
+          const gradientId = "legend-gradient";
+          const gradient = svg.append("defs")
+            .append("linearGradient")
+            .attr("id", gradientId)
+            .attr("x1", "0%")
+            .attr("y1", "0%")
+            .attr("x2", "100%")
+            .attr("y2", "0%");
+            
+          gradient.append("stop")
+            .attr("offset", "0%")
+            .attr("stop-color", color2);
+            
+          gradient.append("stop")
+            .attr("offset", "100%")
+            .attr("stop-color", color1);
+          
+          // Add gradient rectangle
+          legendContainer.append("rect")
+            .attr("x", 0)
+            .attr("y", 30)
+            .attr("width", 150)
+            .attr("height", 15)
+            .attr("fill", `url(#${gradientId})`);
+          
+          // Add labels for the extremes
+          legendContainer.append("text")
+            .attr("x", 0)
+            .attr("y", 60)
+            .attr("font-size", "11px")
+            .text(`100% ${option2.Description}`);
+            
+          legendContainer.append("text")
+            .attr("x", 150 - option1.Description.length * 4)
+            .attr("y", 60)
+            .attr("font-size", "11px")
+            .text(`100% ${option1.Description}`);
+          
+        } else {
+          // Standard legend for multi-candidate races
+          candidatesForContest.forEach((candidate, i) => {
+            const candidateId = String(candidate.Id);
+            const color = colorScale(candidateId);
+            
+            const legendItem = legendContainer.append("g")
+              .attr("transform", `translate(0, ${i * 20 + 20})`);
+            
+            legendItem.append("rect")
+              .attr("width", 15)
+              .attr("height", 15)
+              .attr("fill", color);
+            
+            legendItem.append("text")
+              .attr("x", 20)
+              .attr("y", 12)
+              .attr("font-size", "12px")
+              .text(candidate.Description);
+          });
+          
+          // Add explanation for multi-candidate races
+          const lastY = 20 + candidatesForContest.length * 20;
+          legendContainer.append("text")
+            .attr("x", 0)
+            .attr("y", lastY + 20)
+            .attr("font-size", "11px")
+            .text("Color intensity shows");
+            
+          legendContainer.append("text")
+            .attr("x", 0)
+            .attr("y", lastY + 35)
+            .attr("font-size", "11px")
+            .text("margin of victory");
+        }
 
         // Add circle for each precinct using precomputed centroids
         precincts.forEach(precinct => {
@@ -311,7 +445,17 @@
             
             let maxVotesForCandidate = 0;
             let winningCandidateId = null;
+            let totalContestVotes = 0;
             
+            // First, calculate total votes for this contest in this precinct
+            Object.keys(contestData).forEach(candidateId => {
+              if (candidateId !== 'total' && candidateId !== 'maxVote') {
+                const candidateVotes = contestData[candidateId] || 0;
+                totalContestVotes += candidateVotes;
+              }
+            });
+            
+            // Then find the winner
             Object.keys(contestData).forEach(candidateId => {
               if (candidateId !== 'total' && candidateId !== 'maxVote') {
                 const candidateVotes = contestData[candidateId] || 0;
@@ -322,9 +466,91 @@
               }
             });
             
-            // Log a sample of winning candidates for debugging
+            // Calculate win percentage and opacity
+            let winPercentage = totalContestVotes > 0 ? maxVotesForCandidate / totalContestVotes : 0;
+            
+            // For yes/no contests, check if it's the "YES" option that won
+            const isYesNoContest = candidatesForContest.length === 2 && 
+                                  (candidatesForContest[0].Description === "YES" || 
+                                   candidatesForContest[0].Description === "BONDS - YES");
+            
+            if (isYesNoContest) {
+              // Find the YES option
+              const yesOption = candidatesForContest.find(c => 
+                c.Description === "YES" || c.Description === "BONDS - YES");
+              
+              if (yesOption) {
+                // Calculate percentage of YES votes regardless of whether YES won
+                const yesVotes = contestData[yesOption.Id] || 0;
+                winPercentage = totalContestVotes > 0 ? yesVotes / totalContestVotes : 0;
+              }
+            }
+            
+            // Instead of opacity, determine color based on win percentage
+            let circleColor;
+            
+            if (candidatesForContest.length === 2) {
+              // For contests with exactly 2 options (like YES/NO or 2 candidates)
+              const option1 = candidatesForContest[0];
+              const option2 = candidatesForContest[1];
+              
+              // Define colors based on whether this is a YES/NO contest
+              let color1, color2;
+              
+              if (isYesNoContest) {
+                // Use green for YES, red for NO
+                const yesColor = "#28a745";  // Green
+                const noColor = "#dc3545";   // Red
+                
+                // Determine which option is YES and which is NO
+                const isOption1Yes = option1.Description.includes("YES");
+                color1 = isOption1Yes ? yesColor : noColor;
+                color2 = isOption1Yes ? noColor : yesColor;
+              } else {
+                // Use normal color scale for other two-option contests
+                color1 = colorScale(String(option1.Id));
+                color2 = colorScale(String(option2.Id));
+              }
+              
+              // Calculate percentage for first option
+              const option1Votes = contestData[option1.Id] || 0;
+              const option1Percentage = totalContestVotes > 0 ? option1Votes / totalContestVotes : 0;
+              
+              // Create interpolator between the two colors
+              const colorInterpolator = d3.interpolate(color2, color1);
+              
+              // Map option1's percentage (0-1) to a color
+              circleColor = colorInterpolator(option1Percentage);
+              
+              // Log for debugging
+              if (precinctId % 100 === 0) {
+                console.log(`Precinct ${precinctId}: option1=${option1.Description}, option1%=${option1Percentage.toFixed(2)}, color=${circleColor}`);
+              }
+            } else {
+              // For contests with more than 2 candidates
+              // Blend between winner's color and neutral gray based on win margin
+              if (winningCandidateId) {
+                const winnerColor = colorScale(winningCandidateId);
+                const neutralColor = "#cccccc"; // Light gray
+                
+                // Create an interpolator that goes from neutral to full color
+                // as win percentage goes from 0.34 (bare minimum win in 3-way race) to 0.8 (decisive win)
+                const blendScale = d3.scaleLinear()
+                  .domain([1/candidatesForContest.length, 0.8])
+                  .range([0.2, 1])
+                  .clamp(true);
+                
+                const colorStrength = blendScale(winPercentage);
+                const colorInterpolator = d3.interpolate(neutralColor, winnerColor);
+                circleColor = colorInterpolator(colorStrength);
+              } else {
+                circleColor = "gray";
+              }
+            }
+            
+            // Log some sample values for debugging
             if (precinctId % 100 === 0) {
-              console.log(`Precinct ${precinctId} winner: ${winningCandidateId}, color: ${colorScale(winningCandidateId)}`);
+              console.log(`Precinct ${precinctId}: winner=${winningCandidateId}, votes=${maxVotesForCandidate}/${totalContestVotes}, win%=${winPercentage.toFixed(2)}, color=${circleColor}`);
             }
             
             // Project the longitude/latitude to SVG coordinates
@@ -338,18 +564,39 @@
                 .attr("cy", y)
                 .attr("r", radiusScale(votes))
                 .attr("class", "bubble")
-                .attr("fill", winningCandidateId ? colorScale(winningCandidateId) : "gray")
+                .attr("fill", circleColor)
                 .on("mouseover", function(event) {
                   // Find winning candidate name
                   const winner = candidatesForContest.find(c => c.Id == winningCandidateId);
                   const winnerName = winner ? winner.Description : "No winner determined";
+                  
+                  // Format the win percentage
+                  const winPercentText = isYesNoContest
+                    ? `${(winPercentage * 100).toFixed(1)}% Yes`
+                    : `Winner: ${(winPercentage * 100).toFixed(1)}%`;
+                  
+                  // Get vote counts for each candidate
+                  const precinctData = votesByPrecinct[precinctId] || {};
+                  const contestData = precinctData[contestId] || {};
+                  
+                  // Create HTML for vote counts
+                  let candidateVotesHtml = '<hr><strong>Vote Breakdown:</strong><br>';
+                  candidatesForContest.forEach(candidate => {
+                    const votes = contestData[candidate.Id] || 0;
+                    const votePercent = totalContestVotes > 0 
+                      ? ((votes / totalContestVotes) * 100).toFixed(1) 
+                      : 0;
+                    candidateVotesHtml += `${candidate.Description}: ${votes} (${votePercent}%)<br>`;
+                  });
                   
                   tooltip
                     .style("opacity", 1)
                     .html(`<strong>Precinct:</strong> ${centroid.description}<br>
                            <strong>Neighborhood:</strong> ${centroid.neighborhood}<br>
                            <strong>Votes:</strong> ${votes}<br>
-                           <strong>Winner:</strong> ${winnerName}`)
+                           <strong>Winner:</strong> ${winnerName}<br>
+                           <strong>${winPercentText}</strong>
+                           ${candidateVotesHtml}`)
                     .style("left", (event.pageX + 10) + "px")
                     .style("top", (event.pageY - 28) + "px");
                 })
