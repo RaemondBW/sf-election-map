@@ -47,7 +47,7 @@
     }
     
     .bubble {
-      stroke: white;
+      stroke: black;
       stroke-width: 1px;
     }
     
@@ -334,6 +334,7 @@
           // Colors for yes/no
           const yesColor = "#28a745";  // Green
           const noColor = "#dc3545";   // Red
+          const neutralColor = "#ffffff"; // White for 50/50 split
           
           // Add legend items with description of the gradient
           legendContainer.append("text")
@@ -357,6 +358,10 @@
             .attr("stop-color", noColor);
             
           gradient.append("stop")
+            .attr("offset", "50%")
+            .attr("stop-color", neutralColor);
+            
+          gradient.append("stop")
             .attr("offset", "100%")
             .attr("stop-color", yesColor);
           
@@ -366,19 +371,29 @@
             .attr("y", 30)
             .attr("width", 150)
             .attr("height", 15)
-            .attr("fill", `url(#${gradientId})`);
+            .attr("fill", `url(#${gradientId})`)
+            .attr("stroke", "#999")
+            .attr("stroke-width", 0.5);
           
-          // Add labels for the extremes
+          // Add labels for the extremes and middle
           legendContainer.append("text")
             .attr("x", 0)
             .attr("y", 60)
             .attr("font-size", "11px")
             .text(`100% NO`);
             
+          // legendContainer.append("text")
+          //   .attr("x", 65)
+          //   .attr("y", 60)
+          //   .attr("font-size", "11px")
+          //   .attr("text-anchor", "middle")
+          //   .text(`50/50`);
+            
           legendContainer.append("text")
-            .attr("x", 130)
+            .attr("x", 150)
             .attr("y", 60)
             .attr("font-size", "11px")
+            .attr("text-anchor", "end")
             .text(`100% YES`);
           
         } else {
@@ -482,6 +497,7 @@
               // Use green for YES, red for NO
               const yesColor = "#28a745";  // Green
               const noColor = "#dc3545";   // Red
+              const neutralColor = "#ffffff"; // White for 50/50 split
               
               // Find the YES option
               const yesOption = candidatesForContest.find(c => 
@@ -491,11 +507,21 @@
               const yesVotes = contestData[yesOption.Id] || 0;
               const yesPercentage = totalContestVotes > 0 ? yesVotes / totalContestVotes : 0;
               
-              // Create interpolator between red and green
-              const colorInterpolator = d3.interpolate(noColor, yesColor);
-              
-              // Map yes percentage (0-1) to a color
-              circleColor = colorInterpolator(yesPercentage);
+              // Create interpolator between colors based on whether YES is above or below 50%
+              let colorInterpolator;
+              if (yesPercentage <= 0.5) {
+                // Below 50% YES - interpolate from red to white
+                // Rescale the percentage to 0-1 range for interpolation
+                const scaledPercentage = yesPercentage * 2; // 0% -> 0, 50% -> 1
+                colorInterpolator = d3.interpolate(noColor, neutralColor);
+                circleColor = colorInterpolator(scaledPercentage);
+              } else {
+                // Above 50% YES - interpolate from white to green
+                // Rescale the percentage to 0-1 range for interpolation
+                const scaledPercentage = (yesPercentage - 0.5) * 2; // 50% -> 0, 100% -> 1
+                colorInterpolator = d3.interpolate(neutralColor, yesColor);
+                circleColor = colorInterpolator(scaledPercentage);
+              }
               
               // Log for debugging
               if (precinctId % 100 === 0) {
