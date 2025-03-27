@@ -51,13 +51,6 @@
       stroke-width: 1px;
     }
     
-    /* Test circles for debugging */
-    .test-bubble {
-      fill: blue;
-      stroke: white;
-      fill-opacity: 0.7;
-    }
-    
     .tooltip {
       position: absolute;
       background: #fff;
@@ -81,7 +74,6 @@
   <div id="controls">
     <label for="contest-select">Select Contest: </label>
     <select id="contest-select"></select>
-    <button id="test-btn">Add Test Bubbles</button>
   </div>
   
   <div id="map-container">
@@ -111,37 +103,6 @@
       
     const path = d3.geoPath()
       .projection(projection);
-    
-    // Add test bubbles button functionality
-    document.getElementById("test-btn").addEventListener("click", function() {
-      addTestBubbles();
-    });
-    
-    function addTestBubbles() {
-      // Add test circles at fixed positions
-      const testPositions = [
-        {x: 100, y: 100, r: 20},
-        {x: 200, y: 200, r: 30},
-        {x: 300, y: 300, r: 40},
-        {x: 400, y: 400, r: 50},
-        {x: 500, y: 500, r: 60},
-        {x: 600, y: 100, r: 25},
-        {x: 700, y: 200, r: 35},
-        {x: 800, y: 300, r: 45}
-      ];
-      
-      const testGroup = svg.append("g").attr("class", "test-bubbles");
-      
-      testPositions.forEach(pos => {
-        testGroup.append("circle")
-          .attr("cx", pos.x)
-          .attr("cy", pos.y)
-          .attr("r", pos.r)
-          .attr("class", "test-bubble");
-      });
-      
-      console.log("Added test bubbles at fixed positions");
-    }
     
     // Load all data files
     Promise.all([
@@ -224,8 +185,6 @@
         const selectedContest = contests.find(c => c.Id == contestId);
         if (!selectedContest) return;
         
-        console.log("Updating for contest:", selectedContest.Description);
-        
         // Clear existing bubbles
         bubblesGroup.selectAll("*").remove();
         
@@ -237,8 +196,6 @@
           if (votes > maxVotes) maxVotes = votes;
         });
         
-        console.log("Max votes:", maxVotes);
-        
         // Scale for bubble sizes
         const radiusScale = d3.scaleLinear()
           .domain([0, maxVotes])
@@ -248,8 +205,6 @@
         const candidatesForContest = metaData.candidates
           .filter(candidate => candidate.ContestId == contestId)
           .filter(candidate => candidate.Type !== "WriteIn" && candidate.Type !== "QualifiedWriteIn");
-        
-        console.log("Candidates for contest:", candidatesForContest);
         
         // Create a color scale for the candidates
         const candidateIds = candidatesForContest.map(c => String(c.Id));
@@ -294,18 +249,8 @@
             
             // Replace the colorScale with our custom function for this contest
             colorScale = yesNoColorScale;
-            
-            console.log(`Using custom YES/NO colors: YES=${yesColor}, NO=${noColor}`);
           }
         }
-        
-        // Log the color scale information
-        console.log("Color scale domain:", colorScale.domain());
-        
-        // For debugging - log a few sample colors
-        candidateIds.forEach(id => {
-          console.log(`Color for candidate ${id}: ${colorScale(id)}`);
-        });
         
         // Clear any existing legend
         d3.select("#legend-container").remove();
@@ -381,13 +326,6 @@
             .attr("y", 60)
             .attr("font-size", "11px")
             .text(`100% NO`);
-            
-          // legendContainer.append("text")
-          //   .attr("x", 65)
-          //   .attr("y", 60)
-          //   .attr("font-size", "11px")
-          //   .attr("text-anchor", "middle")
-          //   .text(`50/50`);
             
           legendContainer.append("text")
             .attr("x", 150)
@@ -522,11 +460,6 @@
                 colorInterpolator = d3.interpolate(neutralColor, yesColor);
                 circleColor = colorInterpolator(scaledPercentage);
               }
-              
-              // Log for debugging
-              if (precinctId % 100 === 0) {
-                console.log(`Precinct ${precinctId}: YES%=${yesPercentage.toFixed(2)}, color=${circleColor}`);
-              }
             } else {
               // For all other contests (including non-YES/NO two-candidate races)
               // Blend between winner's color and neutral gray based on win margin
@@ -547,11 +480,6 @@
               } else {
                 circleColor = "gray";
               }
-            }
-            
-            // Log some sample values for debugging
-            if (precinctId % 100 === 0) {
-              console.log(`Precinct ${precinctId}: winner=${winningCandidateId}, votes=${maxVotesForCandidate}/${totalContestVotes}, win%=${winPercentage.toFixed(2)}, color=${circleColor}`);
             }
             
             // Project the longitude/latitude to SVG coordinates
@@ -601,6 +529,7 @@
                            <strong>Neighborhood:</strong> ${centroid.neighborhood}<br>
                            <strong>Votes:</strong> ${votes}<br>
                            <strong>Winner:</strong> ${winnerName}<br>
+                           <strong>${winPercentText}</strong>
                            ${candidateVotesHtml}`)
                     .style("left", tooltipX + "px")
                     .style("top", tooltipY + "px");
