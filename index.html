@@ -23,7 +23,7 @@
     }
     
     #controls {
-      margin: 0 auto 20px;
+      margin: 0 auto 40px;
       width: 600px;
       text-align: center;
     }
@@ -32,36 +32,38 @@
       width: 960px;
       margin: 0 auto;
       position: relative;
-      background-color: #f8f8f8;
+      background-color: white;
+      padding: 60px 20px 20px 20px;
     }
     
     .land {
-      fill: #eee;
+      fill: white;
     }
     
     .boundary {
       fill: none;
-      stroke: #ddd;
+      stroke: black;
       stroke-width: 0.5px;
     }
     
     .bubble {
-      fill: red;
-      fill-opacity: 0.7;
-      stroke: white;
+      stroke: black;
       stroke-width: 1px;
     }
     
     .tooltip {
       position: absolute;
       background: #fff;
-      border: 1px solid #ccc;
+      border: 1px solid black;
       padding: 5px;
       border-radius: 3px;
       pointer-events: none;
       opacity: 0;
       font-size: 12px;
       z-index: 1000;
+      transform: translate(-50%, -100%); /* Position above the mouse */
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      max-width: 250px;
     }
   </style>
 </head>
@@ -82,7 +84,7 @@
   <script>
     // Main dimensions and setup
     const width = 960;
-    const height = 600;
+    const height = 960;
     
     // Create SVG
     const svg = d3.select("#map-container")
@@ -95,7 +97,7 @@
     
     // Define projection for San Francisco
     const projection = d3.geoMercator()
-      .center([-122.45, 37.75])
+      .center([-122.425469, 37.7715049])
       .scale(220000)
       .translate([width / 2, height / 2]);
       
@@ -106,8 +108,9 @@
     Promise.all([
       d3.json("11-2024-precinct-shapes.json"),
       d3.json("11-2024-precinct-vote.json"),
-      d3.json("11-2024-meta.json")
-    ]).then(([shapesData, votesData, metaData]) => {
+      d3.json("11-2024-meta.json"),
+      d3.json("precinct-centroids.json")
+    ]).then(([shapesData, votesData, metaData, centroidsData]) => {
       // Set up the dropdown for contest selection
       const contests = metaData.contests;
       const contestSelect = d3.select("#contest-select");
@@ -126,6 +129,17 @@
       const votesByPrecinct = {};
       votesData.forEach(precinct => {
         votesByPrecinct[precinct.prec_2012] = precinct.Contests;
+      });
+
+      // Create a map of precinct ID to centroids
+      const centroidsByPrecinctId = {};
+      centroidsData.centroids.forEach(centroidData => {
+        centroidsByPrecinctId[centroidData.id] = {
+          longitude: centroidData.longitude,
+          latitude: centroidData.latitude,
+          description: centroidData.description,
+          neighborhood: centroidData.neighborhood
+        };
       });
       
       // Draw the base map (grey)
@@ -171,8 +185,6 @@
         const selectedContest = contests.find(c => c.Id == contestId);
         if (!selectedContest) return;
         
-        console.log("Updating for contest:", selectedContest.Description);
-        
         // Clear existing bubbles
         bubblesGroup.selectAll("*").remove();
         
@@ -184,42 +196,343 @@
           if (votes > maxVotes) maxVotes = votes;
         });
         
-        console.log("Max votes:", maxVotes);
-        
         // Scale for bubble sizes
-        const radiusScale = d3.scaleSqrt()
+        const radiusScale = d3.scaleLinear()
           .domain([0, maxVotes])
-          .range([0, 40]);
+          .range([0, 8]);
         
-        // First just add test circles directly at each precinct centroid
+        // Get all candidates for this contest
+        const candidatesForContest = metaData.candidates
+          .filter(candidate => candidate.ContestId == contestId)
+          .filter(candidate => candidate.Type !== "WriteIn" && candidate.Type !== "QualifiedWriteIn");
+        
+        // Create a color scale for the candidates
+        const candidateIds = candidatesForContest.map(c => String(c.Id));
+        let colorScale = d3.scaleOrdinal()
+          .domain(candidateIds)
+          .range(d3.schemeCategory10);
+          
+        // For Yes/No contests, override with green/red colors
+        const isYesNoContest = candidatesForContest.length === 2 && 
+                              (candidatesForContest[0].Description === "YES" || 
+                               candidatesForContest[0].Description === "BONDS - YES" ||
+                               candidatesForContest[1].Description === "YES" ||
+                               candidatesForContest[1].Description === "BONDS - YES");
+                               
+        if (isYesNoContest) {
+          // Find YES and NO options
+          const yesOption = candidatesForContest.find(c => 
+            c.Description === "YES" || 
+            c.Description === "BONDS - YES");
+            
+          const noOption = candidatesForContest.find(c => 
+            c.Description === "NO" || 
+            c.Description === "BONDS - NO");
+            
+          if (yesOption && noOption) {
+            // Override the colors for YES/NO
+            const yesColor = "#28a745"; // Green
+            const noColor = "#dc3545";  // Red
+            
+            // Save the original domain method
+            const originalDomain = colorScale.domain;
+            
+            // Create a separate color mapping function for yes/no that preserves methods
+            const yesNoColorScale = function(d) {
+              if (d === String(yesOption.Id)) return yesColor;
+              if (d === String(noOption.Id)) return noColor;
+              return colorScale(d); // Fallback to original scale
+            };
+            
+            // Copy methods from original scale to maintain API compatibility
+            yesNoColorScale.domain = originalDomain;
+            
+            // Replace the colorScale with our custom function for this contest
+            colorScale = yesNoColorScale;
+          }
+        }
+        
+        // Clear any existing legend
+        d3.select("#legend-container").remove();
+        
+        // Create legend
+        const legendContainer = svg.append("g")
+          .attr("id", "legend-container")
+          .attr("transform", `translate(${width - 200}, 20)`);
+        
+        // Add legend title
+        legendContainer.append("text")
+          .attr("x", 0)
+          .attr("y", 0)
+          .attr("font-weight", "bold")
+          .text("Candidate Colors");
+        
+        if (candidatesForContest.length === 2 && isYesNoContest) {
+          // Special legend for YES/NO races showing the gradient
+          // Find YES and NO options
+          const yesOption = candidatesForContest.find(c => 
+            c.Description === "YES" || c.Description === "BONDS - YES");
+            
+          const noOption = candidatesForContest.find(c => 
+            c.Description === "NO" || c.Description === "BONDS - NO");
+          
+          // Colors for yes/no
+          const yesColor = "#28a745";  // Green
+          const noColor = "#dc3545";   // Red
+          const neutralColor = "#ffffff"; // White for 50/50 split
+          
+          // Add legend items with description of the gradient
+          legendContainer.append("text")
+            .attr("x", 0)
+            .attr("y", 20)
+            .attr("font-size", "12px")
+            .text("Color shows vote distribution:");
+          
+          // Create gradient definition
+          const gradientId = "legend-gradient";
+          const gradient = svg.append("defs")
+            .append("linearGradient")
+            .attr("id", gradientId)
+            .attr("x1", "0%")
+            .attr("y1", "0%")
+            .attr("x2", "100%")
+            .attr("y2", "0%");
+            
+          gradient.append("stop")
+            .attr("offset", "0%")
+            .attr("stop-color", noColor);
+            
+          gradient.append("stop")
+            .attr("offset", "50%")
+            .attr("stop-color", neutralColor);
+            
+          gradient.append("stop")
+            .attr("offset", "100%")
+            .attr("stop-color", yesColor);
+          
+          // Add gradient rectangle
+          legendContainer.append("rect")
+            .attr("x", 0)
+            .attr("y", 30)
+            .attr("width", 150)
+            .attr("height", 15)
+            .attr("fill", `url(#${gradientId})`)
+            .attr("stroke", "#999")
+            .attr("stroke-width", 0.5);
+          
+          // Add labels for the extremes and middle
+          legendContainer.append("text")
+            .attr("x", 0)
+            .attr("y", 60)
+            .attr("font-size", "11px")
+            .text(`100% NO`);
+            
+          legendContainer.append("text")
+            .attr("x", 150)
+            .attr("y", 60)
+            .attr("font-size", "11px")
+            .attr("text-anchor", "end")
+            .text(`100% YES`);
+          
+        } else {
+          // Standard legend for multi-candidate races
+          candidatesForContest.forEach((candidate, i) => {
+            const candidateId = String(candidate.Id);
+            const color = colorScale(candidateId);
+            
+            const legendItem = legendContainer.append("g")
+              .attr("transform", `translate(0, ${i * 20 + 20})`);
+            
+            legendItem.append("rect")
+              .attr("width", 15)
+              .attr("height", 15)
+              .attr("fill", color);
+            
+            legendItem.append("text")
+              .attr("x", 20)
+              .attr("y", 12)
+              .attr("font-size", "12px")
+              .text(candidate.Description);
+          });
+          
+          // Add explanation for multi-candidate races
+          const lastY = 20 + candidatesForContest.length * 20;
+          legendContainer.append("text")
+            .attr("x", 0)
+            .attr("y", lastY + 20)
+            .attr("font-size", "11px")
+            .text("Color intensity shows");
+            
+          legendContainer.append("text")
+            .attr("x", 0)
+            .attr("y", lastY + 35)
+            .attr("font-size", "11px")
+            .text("margin of victory");
+        }
+
+        // Add circle for each precinct using precomputed centroids
         precincts.forEach(precinct => {
           const precinctId = precinct.properties.prec_2012;
           const votes = getTotalVotes(precinctId, contestId);
+          const centroid = centroidsByPrecinctId[precinctId];
           
-          if (votes > 0) {
-            // Get the centroid
-            const centroid = path.centroid(precinct);
+          if (votes > 0 && centroid) {
+            // Find the winner in this precinct
+            const precinctData = votesByPrecinct[precinctId] || {};
+            const contestData = precinctData[contestId] || {};
             
-            // Only add if centroid is valid
-            if (centroid && !isNaN(centroid[0]) && !isNaN(centroid[1])) {
-              // Log the values for debugging
-              if (precinctId === '1101' || precinctId === '1102' || precinctId === '1103') {
-                console.log(`Precinct ${precinctId}: votes=${votes}, centroid=[${centroid[0]}, ${centroid[1]}], radius=${radiusScale(votes)}`);
+            let maxVotesForCandidate = 0;
+            let winningCandidateId = null;
+            let totalContestVotes = 0;
+            
+            // First, calculate total votes for this contest in this precinct
+            Object.keys(contestData).forEach(candidateId => {
+              if (candidateId !== 'total' && candidateId !== 'maxVote') {
+                const candidateVotes = contestData[candidateId] || 0;
+                totalContestVotes += candidateVotes;
               }
+            });
+            
+            // Then find the winner
+            Object.keys(contestData).forEach(candidateId => {
+              if (candidateId !== 'total' && candidateId !== 'maxVote') {
+                const candidateVotes = contestData[candidateId] || 0;
+                if (candidateVotes > maxVotesForCandidate) {
+                  maxVotesForCandidate = candidateVotes;
+                  winningCandidateId = String(candidateId);
+                }
+              }
+            });
+            
+            // Calculate win percentage and opacity
+            let winPercentage = totalContestVotes > 0 ? maxVotesForCandidate / totalContestVotes : 0;
+            
+            // For yes/no contests, check if it's the "YES" option that won
+            const isYesNoContest = candidatesForContest.length === 2 && 
+                                  (candidatesForContest[0].Description === "YES" || 
+                                   candidatesForContest[0].Description === "BONDS - YES");
+            
+            if (isYesNoContest) {
+              // Find the YES option
+              const yesOption = candidatesForContest.find(c => 
+                c.Description === "YES" || c.Description === "BONDS - YES");
               
+              if (yesOption) {
+                // Calculate percentage of YES votes regardless of whether YES won
+                const yesVotes = contestData[yesOption.Id] || 0;
+                winPercentage = totalContestVotes > 0 ? yesVotes / totalContestVotes : 0;
+              }
+            }
+            
+            // Instead of opacity, determine color based on win percentage
+            let circleColor;
+            
+            if (candidatesForContest.length === 2 && isYesNoContest) {
+              // ONLY for YES/NO contests, use the gradient approach
+              const option1 = candidatesForContest[0];
+              const option2 = candidatesForContest[1];
+              
+              // Use green for YES, red for NO
+              const yesColor = "#28a745";  // Green
+              const noColor = "#dc3545";   // Red
+              const neutralColor = "#ffffff"; // White for 50/50 split
+              
+              // Find the YES option
+              const yesOption = candidatesForContest.find(c => 
+                c.Description === "YES" || c.Description === "BONDS - YES");
+              
+              // Calculate percentage of YES votes
+              const yesVotes = contestData[yesOption.Id] || 0;
+              const yesPercentage = totalContestVotes > 0 ? yesVotes / totalContestVotes : 0;
+              
+              // Create interpolator between colors based on whether YES is above or below 50%
+              let colorInterpolator;
+              if (yesPercentage <= 0.5) {
+                // Below 50% YES - interpolate from red to white
+                // Rescale the percentage to 0-1 range for interpolation
+                const scaledPercentage = yesPercentage * 2; // 0% -> 0, 50% -> 1
+                colorInterpolator = d3.interpolate(noColor, neutralColor);
+                circleColor = colorInterpolator(scaledPercentage);
+              } else {
+                // Above 50% YES - interpolate from white to green
+                // Rescale the percentage to 0-1 range for interpolation
+                const scaledPercentage = (yesPercentage - 0.5) * 2; // 50% -> 0, 100% -> 1
+                colorInterpolator = d3.interpolate(neutralColor, yesColor);
+                circleColor = colorInterpolator(scaledPercentage);
+              }
+            } else {
+              // For all other contests (including non-YES/NO two-candidate races)
+              // Blend between winner's color and neutral gray based on win margin
+              if (winningCandidateId) {
+                const winnerColor = colorScale(winningCandidateId);
+                const neutralColor = "#cccccc"; // Light gray
+                
+                // Create an interpolator that goes from neutral to full color
+                // as win percentage goes from 0.34 (bare minimum win in 3-way race) to 0.8 (decisive win)
+                const blendScale = d3.scaleLinear()
+                  .domain([1/candidatesForContest.length, 0.8])
+                  .range([0.2, 1])
+                  .clamp(true);
+                
+                const colorStrength = blendScale(winPercentage);
+                const colorInterpolator = d3.interpolate(neutralColor, winnerColor);
+                circleColor = colorInterpolator(colorStrength);
+              } else {
+                circleColor = "gray";
+              }
+            }
+            
+            // Project the longitude/latitude to SVG coordinates
+            const [x, y] = projection([centroid.longitude, centroid.latitude]);
+            
+            // Only add if projected coordinates are valid
+            if (!isNaN(x) && !isNaN(y)) {
               // Add circle at this location
               bubblesGroup.append("circle")
-                .attr("cx", centroid[0])
-                .attr("cy", centroid[1])
+                .attr("cx", x)
+                .attr("cy", y)
                 .attr("r", radiusScale(votes))
                 .attr("class", "bubble")
+                .attr("fill", circleColor)
                 .on("mouseover", function(event) {
+                  // Find winning candidate name
+                  const winner = candidatesForContest.find(c => c.Id == winningCandidateId);
+                  const winnerName = winner ? winner.Description : "No winner determined";
+                  
+                  // Format the win percentage
+                  const winPercentText = isYesNoContest
+                    ? `${(winPercentage * 100).toFixed(1)}% Yes`
+                    : `Winner: ${(winPercentage * 100).toFixed(1)}%`;
+                  
+                  // Get vote counts for each candidate
+                  const precinctData = votesByPrecinct[precinctId] || {};
+                  const contestData = precinctData[contestId] || {};
+                  
+                  // Create HTML for vote counts
+                  let candidateVotesHtml = '<hr><strong>Vote Breakdown:</strong><br>';
+                  candidatesForContest.forEach(candidate => {
+                    const votes = contestData[candidate.Id] || 0;
+                    const votePercent = totalContestVotes > 0 
+                      ? ((votes / totalContestVotes) * 100).toFixed(1) 
+                      : 0;
+                    candidateVotesHtml += `${candidate.Description}: ${votes} (${votePercent}%)<br>`;
+                  });
+                  
+                  // Calculate position relative to the map container
+                  const svgRect = svg.node().getBoundingClientRect();
+                  const tooltipX = event.clientX - svgRect.left;
+                  const tooltipY = event.clientY - svgRect.top;
+                  
                   tooltip
                     .style("opacity", 1)
-                    .html(`<strong>Precinct:</strong> ${precinct.properties.Description}<br>
-                           <strong>Votes:</strong> ${votes}`)
-                    .style("left", (event.pageX + 10) + "px")
-                    .style("top", (event.pageY - 28) + "px");
+                    .html(`<strong>Precinct:</strong> ${centroid.description}<br>
+                           <strong>Neighborhood:</strong> ${centroid.neighborhood}<br>
+                           <strong>Votes:</strong> ${votes}<br>
+                           <strong>Winner:</strong> ${winnerName}<br>
+                           <strong>${winPercentText}</strong>
+                           ${candidateVotesHtml}`)
+                    .style("left", tooltipX + "px")
+                    .style("top", tooltipY + "px");
                 })
                 .on("mouseout", function() {
                   tooltip.style("opacity", 0);
