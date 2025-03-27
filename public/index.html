@@ -49,6 +49,7 @@
     .bubble {
       stroke: black;
       stroke-width: 1px;
+      transition: r 0.2s ease, stroke-width 0.2s ease;
     }
     
     .tooltip {
@@ -63,18 +64,20 @@
       z-index: 1000;
       transform: translate(-50%, -100%); /* Position above the mouse */
       box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-      max-width: 300px;
+      min-width: 300px;
     }
     
     .vote-bar {
       margin: 15px 0 2px 0;  /* Increased top margin for the label */
       position: relative;
+      width: 100%;
     }
     
     .vote-bar-container {
       height: 12px;
       background: #eee;
       position: relative;
+      width: 100%;
     }
     
     .vote-bar-fill {
@@ -91,6 +94,8 @@
       margin-bottom: 2px;
       font-size: 11px;
       color: black;
+      white-space: nowrap;  /* Prevent text wrapping */
+      width: auto;  /* Allow text to extend beyond container */
     }
   </style>
 </head>
@@ -522,6 +527,11 @@
                 .attr("class", "bubble")
                 .attr("fill", circleColor)
                 .on("mouseover", function(event) {
+                  // Make circle bigger on hover
+                  d3.select(this)
+                    .attr("r", radiusScale(votes) * 1.5)
+                    .attr("stroke-width", 2);
+
                   // Find winning candidate name
                   const winner = candidatesForContest.find(c => c.Id == winningCandidateId);
                   const winnerName = winner ? winner.Description : "No winner determined";
@@ -602,6 +612,11 @@
                     .style("top", tooltipY + "px");
                 })
                 .on("mouseout", function() {
+                  // Restore original size
+                  d3.select(this)
+                    .attr("r", radiusScale(votes))
+                    .attr("stroke-width", 1);
+                    
                   tooltip.style("opacity", 0);
                 });
             }
