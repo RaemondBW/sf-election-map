@@ -2,7 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -19,7 +19,7 @@ const server = http.createServer((req, res) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
   
   // Normalize the requested URL path
-  let filePath = req.url === '/' ? './index.html' : '.' + req.url;
+  let filePath = req.url === '/' ? './public/index.html' : './public' + req.url;
   
   // Get the file extension
   const extname = path.extname(filePath);

@@ -63,7 +63,34 @@
       z-index: 1000;
       transform: translate(-50%, -100%); /* Position above the mouse */
       box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-      max-width: 250px;
+      max-width: 300px;
+    }
+    
+    .vote-bar {
+      margin: 15px 0 2px 0;  /* Increased top margin for the label */
+      position: relative;
+    }
+    
+    .vote-bar-container {
+      height: 12px;
+      background: #eee;
+      position: relative;
+    }
+    
+    .vote-bar-fill {
+      height: 100%;
+      position: absolute;
+      left: 0;
+      top: 0;
+    }
+    
+    .vote-bar-label {
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      margin-bottom: 2px;
+      font-size: 11px;
+      color: black;
     }
   </style>
 </head>
@@ -508,15 +535,57 @@
                   const precinctData = votesByPrecinct[precinctId] || {};
                   const contestData = precinctData[contestId] || {};
                   
-                  // Create HTML for vote counts
+                  // Create HTML for vote counts with bars
                   let candidateVotesHtml = '<hr><strong>Vote Breakdown:</strong><br>';
-                  candidatesForContest.forEach(candidate => {
+                  
+                  // Filter candidates to only those with > 1% of votes
+                  const significantCandidates = candidatesForContest.filter(candidate => {
+                    const votes = contestData[candidate.Id] || 0;
+                    const votePercent = totalContestVotes > 0 
+                      ? (votes / totalContestVotes) * 100
+                      : 0;
+                    return votePercent > 1;
+                  });
+
+                  // Sort candidates by vote count (descending)
+                  significantCandidates.sort((a, b) => {
+                    const votesA = contestData[a.Id] || 0;
+                    const votesB = contestData[b.Id] || 0;
+                    return votesB - votesA;
+                  });
+
+                  significantCandidates.forEach(candidate => {
                     const votes = contestData[candidate.Id] || 0;
                     const votePercent = totalContestVotes > 0 
                       ? ((votes / totalContestVotes) * 100).toFixed(1) 
                       : 0;
-                    candidateVotesHtml += `${candidate.Description}: ${votes} (${votePercent}%)<br>`;
+                    
+                    // Get the color for this candidate/option
+                    let barColor;
+                    if (isYesNoContest) {
+                      const isYes = candidate.Description === "YES" || candidate.Description === "BONDS - YES";
+                      barColor = isYes ? "#28a745" : "#dc3545";
+                    } else {
+                      barColor = colorScale(String(candidate.Id));
+                    }
+                    
+                    // Create bar chart
+                    candidateVotesHtml += `
+                      <div class="vote-bar">
+                        <div class="vote-bar-label">${candidate.Description}: ${votes} (${votePercent}%)</div>
+                        <div class="vote-bar-container">
+                          <div class="vote-bar-fill" style="width: ${votePercent}%; background-color: ${barColor}"></div>
+                        </div>
+                      </div>`;
                   });
+
+                  // Add a note about other candidates if any were filtered out
+                  const otherCandidates = candidatesForContest.length - significantCandidates.length;
+                  if (otherCandidates > 0) {
+                    candidateVotesHtml += `<div style="margin-top: 10px; font-size: 11px; color: #666;">
+                      ${otherCandidates} other candidate${otherCandidates > 1 ? 's' : ''} received less than 1% of votes
+                    </div>`;
+                  }
                   
                   // Calculate position relative to the map container
                   const svgRect = svg.node().getBoundingClientRect();
@@ -527,9 +596,7 @@
                     .style("opacity", 1)
                     .html(`<strong>Precinct:</strong> ${centroid.description}<br>
                            <strong>Neighborhood:</strong> ${centroid.neighborhood}<br>
-                           <strong>Votes:</strong> ${votes}<br>
-                           <strong>Winner:</strong> ${winnerName}<br>
-                           <strong>${winPercentText}</strong>
+                           <strong>Total Votes:</strong> ${votes}<br>
                            ${candidateVotesHtml}`)
                     .style("left", tooltipX + "px")
                     .style("top", tooltipY + "px");
