@@ -53,16 +53,12 @@
       flex: 1;
       display: flex;
       align-items: center;
-      overflow: hidden;
-      padding: 20px 0;
     }
     
     #map-svg {
       width: 100%;
-      height: 100%;
-      max-height: calc(100vh - 200px);
+      height: auto;
       display: block;
-      margin: 0 auto;
     }
     
     .land {
@@ -217,7 +213,7 @@
   <script>
     // Main dimensions and setup
     let width = Math.min(960, window.innerWidth - 40); // 40px for padding
-    let height = Math.min(width * 0.52, window.innerHeight - 200); // Maintain aspect ratio with max height
+    let height = width * 0.52; // Maintain aspect ratio
     
     // Create SVG
     const svg = d3.select("#map-container")
@@ -232,7 +228,7 @@
     // Define projection for San Francisco
     const projection = d3.geoMercator()
       .center([-122.425469, 37.7715049])
-      .scale(width * 229) // Scale relative to width
+      .scale(width * 179) // Scale relative to width
       .translate([width / 2, height / 2]);
       
     const path = d3.geoPath()
@@ -343,9 +339,37 @@
         const candidatesForContest = metaData.candidates
           .filter(candidate => candidate.ContestId == contestId)
           .filter(candidate => candidate.Type !== "WriteIn" && candidate.Type !== "QualifiedWriteIn");
+
+        // Find candidates who won at least one precinct
+        const winningCandidates = new Set();
+        precincts.forEach(precinct => {
+          const precinctId = precinct.properties.prec_2012;
+          const precinctData = votesByPrecinct[precinctId] || {};
+          const contestData = precinctData[contestId] || {};
+          
+          let maxVotesInPrecinct = 0;
+          let winningCandidateId = null;
+          
+          Object.entries(contestData).forEach(([candidateId, votes]) => {
+            if (candidateId !== 'total' && candidateId !== 'maxVote') {
+              if (votes > maxVotesInPrecinct) {
+                maxVotesInPrecinct = votes;
+                winningCandidateId = candidateId;
+              }
+            }
+          });
+          
+          if (winningCandidateId) {
+            winningCandidates.add(String(winningCandidateId));
+          }
+        });
+        
+        // Filter candidates to only those who won at least one precinct
+        const winningCandidatesForContest = candidatesForContest
+          .filter(candidate => winningCandidates.has(String(candidate.Id)));
         
         // Create a color scale for the candidates
-        const candidateIds = candidatesForContest.map(c => String(c.Id));
+        const candidateIds = winningCandidatesForContest.map(c => String(c.Id));
         let colorScale = d3.scaleOrdinal()
           .domain(candidateIds)
           .range(d3.schemeCategory10);
@@ -403,7 +427,7 @@
           .attr("x", 0)
           .attr("y", 0)
           .attr("font-weight", "bold")
-          .text("Candidate Colors");
+          .text("Candidates");
         
         if (candidatesForContest.length === 2 && isYesNoContest) {
           // Special legend for YES/NO races showing the gradient
@@ -474,7 +498,7 @@
           
         } else {
           // Standard legend for multi-candidate races
-          candidatesForContest.forEach((candidate, i) => {
+          winningCandidatesForContest.forEach((candidate, i) => {
             const candidateId = String(candidate.Id);
             const color = colorScale(candidateId);
             
@@ -494,7 +518,7 @@
           });
           
           // Add explanation for multi-candidate races
-          const lastY = 20 + candidatesForContest.length * 20;
+          const lastY = 20 + winningCandidatesForContest.length * 20;
           legendContainer.append("text")
             .attr("x", 0)
             .attr("y", lastY + 20)
@@ -783,7 +807,7 @@
       window.addEventListener('resize', () => {
         // Update dimensions
         width = Math.min(960, window.innerWidth - 40);
-        height = Math.min(width * 0.52, window.innerHeight - 200);
+        height = width * 0.52;
         
         // Update projection
         projection
