@@ -25,32 +25,44 @@ npm run dev
 
 The server will start at http://localhost:3000
 
-## Deploying to Vercel
+## Hosting
 
-This project is ready to deploy on Vercel. Follow these steps:
+The site is plain static files in `public/`, published with GitHub Pages by
+`.github/workflows/pages.yml` on every push to `main`. Because the
+`raemondbw.github.com` user site uses the `raemond.com` domain, this repo is served at
+https://raemond.com/sf-election-map/.
 
-1. Install the Vercel CLI:
+One-time setup: in the repo's Settings → Pages, set **Source** to **GitHub Actions**.
+
+## Updating the 2026 results
+
+SF Elections posts new preliminary results most afternoons until the election is
+certified (by Dec 3, 2026). Each report with a Statement of the Vote can be
+converted into the map's data files:
+
 ```bash
-npm install -g vercel
+# Newest report folder is listed at https://www.sfelections.org/results/20261103w/detail.html
+URL=https://www.sfelections.org/results/20261103/data/20261105/sov.xlsx
+curl -A "Mozilla/5.0" -o /tmp/sov.xlsx "$URL"   # the site refuses requests without a browser user-agent
+pip install openpyxl
+python3 tools/sov_to_json.py /tmp/sov.xlsx 11-2026 "$URL"
 ```
 
-2. Deploy to Vercel:
-```bash
-vercel
-```
-
-3. Or connect your GitHub repository to Vercel for automatic deployments.
+The script refuses to write anything unless each contest's precinct totals add up
+to the countywide totals. Commit and push the two updated `public/11-2026-*.json`
+files to publish.
 
 ## Data Sources
 
 - San Francisco Department of Elections
-- Precinct shapes and voting data from November 2024 general election
+- Precinct shapes and voting data from the November 2024 and November 2026 general elections
+- 2026 results are preliminary until certification; ranked-choice contests show first-choice votes
 
 ## Technologies Used
 
 - D3.js for data visualization
 - Node.js for local development server
-- Vercel for deployment
+- GitHub Pages for hosting
 
 ## Implementation Details
 

@@ -123,7 +123,7 @@
       width: auto;  /* Allow text to extend beyond container */
     }
     
-    #contest-select {
+    #election-select, #contest-select {
       width: 100%;
       padding: 12px;
       font-size: 16px;
@@ -141,17 +141,17 @@
       transition: border-color 0.2s ease;
     }
     
-    #contest-select option {
+    #election-select option, #contest-select option {
       font-size: 16px;
       padding: 12px;
       line-height: 1.4;
     }
     
-    #contest-select:hover {
+    #election-select:hover, #contest-select:hover {
       border-color: #999;
     }
     
-    #contest-select:focus {
+    #election-select:focus, #contest-select:focus {
       outline: none;
       border-color: #666;
       box-shadow: 0 0 5px rgba(0,0,0,0.1);
@@ -163,6 +163,20 @@
       width: 100%;
     }
     
+    .select-container + .select-container {
+      margin-top: 12px;
+    }
+
+    .data-note {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #777;
+    }
+
+    .data-note a {
+      color: inherit;
+    }
+
     .select-label {
       display: block;
       margin-bottom: 8px;
@@ -188,6 +202,7 @@
         margin-bottom: 20px;
       }
       
+      #election-select, #election-select option,
       #contest-select, #contest-select option {
         font-size: 16px;  /* Keep font size readable on mobile */
         padding: 12px;
@@ -204,9 +219,14 @@
     <h1>San Francisco Election Results by Precinct</h1>
     <div class="description">Bubble size represents total votes in each precinct for the selected contest</div>
     <div class="select-container">
+      <label for="election-select" class="select-label">Select Election:</label>
+      <select id="election-select"></select>
+    </div>
+    <div class="select-container">
       <label for="contest-select" class="select-label">Select Contest:</label>
       <select id="contest-select"></select>
     </div>
+    <div id="data-note" class="data-note"></div>
   </div>
   
   <script src="https://d3js.org/d3.v7.min.js"></script>
@@ -234,36 +254,49 @@
     const path = d3.geoPath()
       .projection(projection);
     
-    // Load all data files
+    // Elections available on the map, newest first. Each one has
+    // <id>-meta.json and <id>-precinct-vote.json in this folder.
+    // Both elections use the same 514 precincts, so they share one set of shapes.
+    const ELECTIONS = [
+      {
+        id: "11-2026",
+        label: "November 3, 2026 General",
+        note: "Preliminary results, still being counted"
+      },
+      {
+        id: "11-2024",
+        label: "November 5, 2024 General",
+        note: "Final results"
+      }
+    ];
+    const electionCache = {};
+
+    // Load the shared map files, then the selected election
     Promise.all([
       d3.json("11-2024-precinct-shapes.json"),
-      d3.json("11-2024-precinct-vote.json"),
-      d3.json("11-2024-meta.json"),
       d3.json("precinct-centroids.json")
-    ]).then(([shapesData, votesData, metaData, centroidsData]) => {
-      // Get contest ID from URL if present
+    ]).then(([shapesData, centroidsData]) => {
+      // Get election and contest from URL if present
       const urlParams = new URLSearchParams(window.location.search);
+      const electionIdFromUrl = urlParams.get('election');
       const contestIdFromUrl = urlParams.get('contest');
       
-      // Set up the dropdown for contest selection
-      const contests = metaData.contests;
+      const electionSelect = d3.select("#election-select");
+      ELECTIONS.forEach(election => {
+        electionSelect.append("option")
+          .attr("value", election.id)
+          .text(election.label);
+      });
+      
       const contestSelect = d3.select("#contest-select");
       
-      // Add options to dropdown
-      contests.forEach(contest => {
-        contestSelect.append("option")
-          .attr("value", contest.Id)
-          .text(contest.Description);
-      });
+      // Set by loadElection() for the election being shown
+      let metaData = null;
+      let contests = [];
+      let votesByPrecinct = {};
       
       // Get precinct features from the shapes file
       const precincts = shapesData.features;
-      
-      // Create map from precinct ID to votes
-      const votesByPrecinct = {};
-      votesData.forEach(precinct => {
-        votesByPrecinct[precinct.prec_2012] = precinct.Contests;
-      });
 
       // Create a map of precinct ID to centroids
       const centroidsByPrecinctId = {};
@@ -784,24 +817,85 @@
         });
       }
       
-      // Update URL when contest changes
-      contestSelect.on("change", function() {
-        const newContestId = this.value;
+      function setUrl(electionId, contestId) {
         // Update URL without reloading the page
         const newUrl = new URL(window.location);
-        newUrl.searchParams.set('contest', newContestId);
+        newUrl.searchParams.set('election', electionId);
+        newUrl.searchParams.set('contest', contestId);
         window.history.pushState({}, '', newUrl);
+      }
+      
+      function fetchElection(id) {
+        if (!electionCache[id]) {
+          electionCache[id] = Promise.all([
+            d3.json(`${id}-meta.json`),
+            d3.json(`${id}-precinct-vote.json`)
+          ]);
+        }
+        return electionCache[id];
+      }
+      
+      // Load an election's results and show the requested contest. If that
+      // contest isn't in this election, show the contest with the same name,
+      // or turnout.
+      function loadElection(electionId, contestId, contestName) {
+        const election = ELECTIONS.find(e => e.id === electionId) || ELECTIONS[0];
+        electionSelect.property("value", election.id);
         
-        updateVisualization(newContestId);
+        return fetchElection(election.id).then(([meta, votesData]) => {
+          metaData = meta;
+          contests = meta.contests;
+          votesByPrecinct = {};
+          votesData.forEach(precinct => {
+            votesByPrecinct[precinct.prec_2012] = precinct.Contests;
+          });
+          
+          contestSelect.selectAll("option").remove();
+          contests.forEach(contest => {
+            contestSelect.append("option")
+              .attr("value", contest.Id)
+              .text(contest.Description);
+          });
+          
+          const contest =
+            (contestName && contests.find(c => c.Description === contestName)) ||
+            (contestId != null && contests.find(c => c.Id == contestId)) ||
+            contests.find(c => c.Id === 99) || contests[0];
+          contestSelect.property("value", contest.Id);
+          
+          const note = d3.select("#data-note").html("");
+          note.append("span").text(
+            `${election.note}` +
+            (meta.report_name ? ` (${meta.report_name}${meta.last_updated ? ", " + meta.last_updated : ""})` : "") +
+            ". Source: "
+          );
+          note.append("a")
+            .attr("href", meta.source || "https://www.sf.gov/departments--department-elections")
+            .attr("target", "_blank")
+            .attr("rel", "noopener")
+            .text("SF Department of Elections");
+          
+          updateVisualization(contest.Id);
+          return contest.Id;
+        });
+      }
+      
+      electionSelect.on("change", function() {
+        const current = contests.find(c => c.Id == contestSelect.property("value"));
+        const electionId = this.value;
+        loadElection(electionId, null, current && current.Description)
+          .then(contestId => setUrl(electionId, contestId));
       });
       
-      // Initialize with contest from URL, or turnout (99), or first contest
-      const initialContest = contestIdFromUrl ? 
-        contests.find(c => c.Id == contestIdFromUrl) || contests[0] :
-        contests.find(c => c.Id === 99) || contests[0];
+      contestSelect.on("change", function() {
+        setUrl(electionSelect.property("value"), this.value);
+        updateVisualization(this.value);
+      });
       
-      contestSelect.property("value", initialContest.Id);
-      updateVisualization(initialContest.Id);
+      // Initialize with election and contest from URL. Links shared before
+      // there was an election picker only have ?contest=, and meant 2024.
+      const initialElection = electionIdFromUrl || (contestIdFromUrl ? "11-2024" : ELECTIONS[0].id);
+      loadElection(initialElection, contestIdFromUrl);
 
       // Add resize handler
       window.addEventListener('resize', () => {
