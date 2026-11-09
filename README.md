@@ -42,8 +42,8 @@ converted into the map's data files:
 
 ```bash
 # Newest report folder is listed at https://www.sfelections.org/results/20261103w/detail.html
-URL=https://www.sfelections.org/results/20261103/data/20261105/sov.xlsx
-curl -A "Mozilla/5.0" -o /tmp/sov.xlsx "$URL"   # the site refuses requests without a browser user-agent
+URL=https://www.sfelections.org/results/20261103/data/20261108/sov.xlsx
+curl -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/130.0 Safari/537.36" -o /tmp/sov.xlsx "$URL"   # the site refuses requests without a browser user-agent
 pip install openpyxl
 python3 tools/sov_to_json.py /tmp/sov.xlsx 11-2026 "$URL"
 ```
